@@ -9,8 +9,8 @@ const fmtTime = (ms) =>
 /** Right rail: the model's strongest currently-playable picks, acca odds product. */
 export default function BetSlip({ events }) {
   const picks = events
-    .filter((e) => e.best && e.best.tier !== 'lean' && e.startTime > Date.now())
-    .sort((a, b) => b.best.score - a.best.score)
+    .filter((e) => e.best && e.best.tier !== 'lean' && e.best.prob >= 0.58 && e.startTime > Date.now())
+    .sort((a, b) => b.best.prob - a.best.prob)
     .slice(0, 6)
 
   const acca = picks.reduce((acc, e) => acc * e.best.odds, 1)
@@ -20,13 +20,13 @@ export default function BetSlip({ events }) {
       <div className="flex items-center gap-2">
         <Lightning size={16} weight="fill" className="text-emerald-300" />
         <h2 className="text-sm font-semibold tracking-wide text-zinc-300 uppercase">
-          Today's sharpest slip
+          Highest-confidence slip
         </h2>
       </div>
 
       {picks.length === 0 ? (
         <p className="mt-6 border-t border-ink-800 pt-6 text-sm leading-relaxed text-zinc-500">
-          Nothing clears the strong or value bar right now. New markets open through the day —
+          Nothing clears the 58% confidence bar right now. New markets open through the day —
           the board refreshes automatically every 20 minutes.
         </p>
       ) : (
@@ -48,6 +48,9 @@ export default function BetSlip({ events }) {
                 <div className="mt-0.5 flex items-center justify-between">
                   <span className="truncate text-xs text-zinc-500">
                     {e.home} vs {e.away}
+                  </span>
+                  <span className="font-mono text-xs text-zinc-400">
+                    {Math.round(e.best.prob * 100)}%
                   </span>
                   <span className="font-mono text-sm font-semibold text-emerald-300">
                     {e.best.odds.toFixed(2)}

@@ -82,6 +82,6 @@ Render logs. Fallback: run the backend on a cheap VPS instead (same Docker image
 
 ## Notes
 
-- Tiers: **strong** = EV > 15% with probability ≥ 60% and 20+ historical sets; **value** = positive EV; **lean** = best of a weak board.
+- Tiers: **strong** = model probability ≥ 72%; **value** = ≥ 58%; **lean** = below that. Best pick per match = highest probability among match winner, 1st set winner, and 1st set totals.
 - Head-to-head results from the sample window are weighted into winner and set-total pricing.
 - This is a statistics explorer, not betting advice. These leagues are extremely volatile.

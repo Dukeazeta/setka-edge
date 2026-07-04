@@ -68,9 +68,14 @@ export default function EventRow({ event, index }) {
 
         <div className="flex items-center gap-3">
           {best && (
-            <span className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 font-mono text-sm font-semibold text-emerald-300">
-              {best.odds.toFixed(2)}
-            </span>
+            <>
+              <span className="hidden font-mono text-xs text-zinc-400 sm:inline">
+                {Math.round(best.prob * 100)}%
+              </span>
+              <span className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 font-mono text-sm font-semibold text-emerald-300">
+                {best.odds.toFixed(2)}
+              </span>
+            </>
           )}
           <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ type: 'spring', stiffness: 200, damping: 22 }}>
             <CaretDown size={16} className="text-zinc-500" />

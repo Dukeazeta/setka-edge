@@ -106,6 +106,10 @@ def _bt(pa: float, pb: float) -> float:
     return num / den if den else 0.5
 
 
+# Markets eligible for the headline "best pick" — excludes deuce/No at ~85% which always wins on prob.
+PRIMARY_MARKETS = {"186", "245", "247"}
+
+
 def evaluate_event(stats: PlayerStats, event: dict, market_data: dict) -> dict:
     """Price every supported market for one event and pick the best options."""
     hid = stats.find(event["home"])
@@ -204,15 +208,29 @@ def evaluate_event(stats: PlayerStats, event: dict, market_data: dict) -> dict:
                 "odds": odds,
                 "prob": round(p, 3),
                 "ev": round(ev, 3),
-                # rank blends value and reliability; probability dominates
-                "score": round(ev + 0.35 * p, 3),
+                "mid": mid,
             })
 
-    picks.sort(key=lambda r: -r["score"])
-    out["picks"] = picks[:6]
-    if picks:
-        best = picks[0]
-        tier = "strong" if (best["ev"] > 0.15 and best["prob"] >= 0.6 and n >= 20) else \
-               "value" if best["ev"] > 0.05 else "lean"
-        out["best"] = {**best, "tier": tier}
+    picks.sort(key=lambda r: (-r["prob"], -r["ev"]))
+    out["picks"] = [{k: v for k, v in p.items() if k != "mid"} for p in picks[:8]]
+
+    eligible = [p for p in picks if p["mid"] in PRIMARY_MARKETS] or picks
+    eligible.sort(key=lambda r: (-r["prob"], -r["ev"]))
+    if eligible:
+        best = eligible[0]
+        tier = (
+            "strong"
+            if best["prob"] >= 0.72
+            else "value"
+            if best["prob"] >= 0.58
+            else "lean"
+        )
+        out["best"] = {
+            "market": best["market"],
+            "bet": best["bet"],
+            "odds": best["odds"],
+            "prob": best["prob"],
+            "ev": best["ev"],
+            "tier": tier,
+        }
     return out

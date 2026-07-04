@@ -44,7 +44,7 @@ export default function App() {
             </h1>
             <p className="mt-3 max-w-[52ch] text-base leading-relaxed text-zinc-400">
               Every unstarted Setka Cup match on SportyBet, priced against ten days of official
-              results. The model surfaces the single best market per game.
+              results. The model surfaces the highest-probability market per game.
             </p>
           </div>
           <div className="flex items-center gap-4 md:justify-end">
