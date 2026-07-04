@@ -1,0 +1,9 @@
+# Option 3: free tier, wakes on visit — no keep-alive pingers.
+services:
+  - type: web
+    name: setka-edge
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true

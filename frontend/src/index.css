@@ -1,0 +1,34 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --color-ink-950: #0c0e11;
+  --color-ink-900: #14171c;
+  --color-ink-850: #191d23;
+  --color-ink-800: #21262e;
+  --color-ink-700: #2e3542;
+  --color-accent: #34d399;
+}
+
+html {
+  background: var(--color-ink-950);
+  color: #e7e9ec;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(52, 211, 153, 0.25);
+}
+
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #191d23 25%, #21262e 50%, #191d23 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.6s infinite linear;
+}
