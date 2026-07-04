@@ -4,7 +4,9 @@ import { ArrowsClockwise, WifiSlash } from '@phosphor-icons/react'
 import { usePredictions } from './usePredictions.js'
 import { PulseDot, SkeletonRow } from './components/atoms.jsx'
 import EventRow from './components/EventRow.jsx'
-import BetSlip from './components/BetSlip.jsx'
+import BetSlip, { useSlipPicks } from './components/BetSlip.jsx'
+import FilterChips from './components/FilterChips.jsx'
+import MobileDock from './components/MobileDock.jsx'
 
 const LEAGUE_FILTERS = ['All', 'Ukraine', 'Czech Republic', 'Moldova']
 
@@ -23,109 +25,117 @@ export default function App() {
     return filter === 'All' ? all : all.filter((e) => leagueOf(e) === filter)
   }, [data, filter])
 
+  const slipPicks = useSlipPicks(data?.events || [])
+  const slipAcca = slipPicks.reduce((acc, e) => acc * e.best.odds, 1)
+
   const updated = data?.updatedAt
     ? new Date(data.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : null
 
+  const scrollToSlip = () => {
+    document.getElementById('slip')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   return (
     <div className="min-h-[100dvh]">
-      <div className="mx-auto max-w-[1400px] px-4 pb-24 md:px-10">
-        {/* Asymmetric header: heavy left block, meta on the right */}
-        <header className="grid grid-cols-1 gap-6 pt-10 md:grid-cols-[2fr_1fr] md:items-end md:pt-16">
+      <div className="mx-auto max-w-[1400px] px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] md:px-10 md:pb-24 md:pt-10">
+        <header className="grid grid-cols-1 gap-5 md:grid-cols-[2fr_1fr] md:items-end md:gap-6 md:pt-6">
           <div>
             <div className="flex items-center gap-2.5">
               <PulseDot />
-              <span className="font-mono text-xs tracking-widest text-zinc-500 uppercase">
-                {waking ? 'waking server' : 'live model · refreshes when active'}
+              <span className="font-mono text-[10px] tracking-widest text-zinc-500 uppercase sm:text-xs">
+                {waking ? 'waking server' : 'live model'}
               </span>
             </div>
-            <h1 className="mt-3 text-4xl font-bold tracking-tighter text-zinc-50 md:text-6xl md:leading-none">
+            <h1 className="mt-2 text-3xl font-bold tracking-tighter text-zinc-50 sm:text-4xl md:text-6xl md:leading-none">
               Setka Edge
             </h1>
-            <p className="mt-3 max-w-[52ch] text-base leading-relaxed text-zinc-400">
-              Every unstarted Setka Cup match on SportyBet, priced against ten days of official
-              results. The model surfaces the highest-probability market per game.
+            <p className="mt-2 max-w-[52ch] text-sm leading-relaxed text-zinc-400 sm:text-base">
+              Setka Cup matches on SportyBet, ranked by highest model probability.
             </p>
           </div>
-          <div className="flex items-center gap-4 md:justify-end">
+
+          <div className="flex flex-wrap items-center gap-3 md:justify-end">
             {updated && (
-              <span className="font-mono text-xs text-zinc-500">
-                updated {updated}
-                {data?.historyMatches ? ` · ${data.historyMatches.toLocaleString()} matches learned` : ''}
+              <span className="font-mono text-[11px] text-zinc-500 sm:text-xs">
+                {updated}
+                {data?.historyMatches ? ` · ${data.historyMatches.toLocaleString()} learned` : ''}
               </span>
             )}
             <motion.button
               type="button"
               onClick={forceRefresh}
               whileTap={{ scale: 0.96 }}
-              className="inline-flex items-center gap-2 rounded-full border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-zinc-500"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-ink-700 bg-ink-900 px-4 py-2.5 text-sm text-zinc-300 transition-colors hover:border-zinc-500"
             >
-              <ArrowsClockwise size={15} weight="bold" />
+              <ArrowsClockwise size={16} weight="bold" />
               Refresh
             </motion.button>
           </div>
         </header>
 
-        {/* Cold start / refresh banners */}
+        {status === 'ready' && data?.events?.length > 0 && (
+          <div className="mt-6 grid grid-cols-3 gap-2 border-y border-ink-800 py-3 md:mt-8 md:gap-4">
+            <div>
+              <p className="font-mono text-lg font-semibold text-zinc-100">{data.events.length}</p>
+              <p className="text-[10px] tracking-wide text-zinc-500 uppercase">on board</p>
+            </div>
+            <div>
+              <p className="font-mono text-lg font-semibold text-emerald-300">{slipPicks.length}</p>
+              <p className="text-[10px] tracking-wide text-zinc-500 uppercase">58%+ picks</p>
+            </div>
+            <div>
+              <p className="font-mono text-lg font-semibold text-zinc-100">
+                {slipPicks.length ? slipAcca.toFixed(2) : '—'}
+              </p>
+              <p className="text-[10px] tracking-wide text-zinc-500 uppercase">slip odds</p>
+            </div>
+          </div>
+        )}
+
         {waking && status === 'loading' && (
-          <div className="mt-8 rounded-2xl border border-ink-700 bg-ink-900/80 px-5 py-4">
+          <div className="mt-6 rounded-2xl border border-ink-700 bg-ink-900/80 px-4 py-3.5 sm:px-5 sm:py-4">
             <p className="font-medium text-zinc-200">Waking the server</p>
-            <p className="mt-1 max-w-[58ch] text-sm leading-relaxed text-zinc-500">
-              On Render free tier the app sleeps after inactivity. First visit can take up to a
-              minute while the container starts and the model loads fresh data.
+            <p className="mt-1 text-sm leading-relaxed text-zinc-500">
+              First visit after sleep can take up to a minute on Render free tier.
             </p>
           </div>
         )}
 
         {status === 'ready' && data?.refreshing && (
-          <div className="mt-8 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-5 py-3">
-            <p className="text-sm text-emerald-300">Refreshing predictions from SportyBet and Setka Cup…</p>
+          <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3">
+            <p className="text-sm text-emerald-300">Refreshing predictions…</p>
           </div>
         )}
 
-        {/* League filter */}
-        <nav className="mt-10 flex flex-wrap gap-2">
-          {LEAGUE_FILTERS.map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFilter(f)}
-              className={`rounded-full px-4 py-1.5 text-sm transition-all active:scale-[0.97] ${
-                filter === f
-                  ? 'bg-zinc-100 font-medium text-zinc-900'
-                  : 'border border-ink-700 text-zinc-400 hover:border-zinc-500'
-              }`}
-            >
-              {f}
-            </button>
-          ))}
-        </nav>
+        <div className="mt-6 md:mt-10">
+          <FilterChips options={LEAGUE_FILTERS} value={filter} onChange={setFilter} />
+        </div>
 
-        {/* Asymmetric body: 2fr feed / 1fr slip */}
-        <main className="mt-8 grid grid-cols-1 gap-12 lg:grid-cols-[2fr_1fr]">
-          <section>
+        {/* Mobile: slip carousel first, then feed. Desktop: side-by-side. */}
+        <main className="mt-6 grid grid-cols-1 gap-10 lg:mt-8 lg:grid-cols-[2fr_1fr] lg:gap-12">
+          <section className="order-2 lg:order-1">
             {status === 'loading' && (
               <div>
-                {Array.from({ length: 7 }).map((_, i) => (
+                {Array.from({ length: 6 }).map((_, i) => (
                   <SkeletonRow key={i} />
                 ))}
               </div>
             )}
 
             {status === 'error' && (
-              <div className="flex flex-col items-start gap-4 border-t border-ink-800 pt-10">
+              <div className="flex flex-col items-start gap-4 border-t border-ink-800 pt-8">
                 <WifiSlash size={28} className="text-zinc-600" />
                 <div>
                   <p className="font-medium text-zinc-300">Can't reach the prediction engine.</p>
                   <p className="mt-1 max-w-[48ch] text-sm leading-relaxed text-zinc-500">
-                    The server may still be waking on Render, or the fetch failed. Wait a moment and
-                    retry. Error: {error}
+                    Server may still be waking. Error: {error}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => window.location.reload()}
-                  className="rounded-full border border-ink-700 px-4 py-1.5 text-sm text-zinc-300 hover:border-zinc-500 active:scale-[0.97]"
+                  className="min-h-[44px] rounded-full border border-ink-700 px-5 py-2.5 text-sm text-zinc-300 hover:border-zinc-500 active:scale-[0.97]"
                 >
                   Retry
                 </button>
@@ -133,11 +143,10 @@ export default function App() {
             )}
 
             {status === 'ready' && events.length === 0 && (
-              <div className="border-t border-ink-800 pt-12">
-                <p className="font-medium text-zinc-300">No upcoming matches on the board.</p>
-                <p className="mt-2 max-w-[52ch] text-sm leading-relaxed text-zinc-500">
-                  SportyBet lists Setka Cup fixtures in rolling batches through the day. Leave this
-                  open — the feed re-checks every minute and new matches will drop in by themselves.
+              <div className="border-t border-ink-800 pt-10">
+                <p className="font-medium text-zinc-300">No matches for this filter.</p>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+                  Fixtures roll in through the day. Try another league or check back shortly.
                 </p>
               </div>
             )}
@@ -146,19 +155,22 @@ export default function App() {
               events.map((e, i) => <EventRow key={e.eventId} event={e} index={i} />)}
           </section>
 
-          <aside>
-            {status === 'ready' && <BetSlip events={data?.events || []} />}
+          <aside className="order-1 lg:order-2">
+            {status === 'ready' && <BetSlip events={data?.events || []} id="slip" />}
           </aside>
         </main>
 
-        <footer className="mt-20 border-t border-ink-800 pt-6">
+        <footer className="mt-16 border-t border-ink-800 pt-6 md:mt-20">
           <p className="max-w-[70ch] text-xs leading-relaxed text-zinc-600">
             Setka Edge is a statistics explorer, not betting advice. Table tennis daily leagues are
-            extremely volatile; no pick is safe. Never stake money you can't afford to lose. 18+,
-            bet responsibly.
+            extremely volatile. Never stake money you can't afford to lose. 18+, bet responsibly.
           </p>
         </footer>
       </div>
+
+      {status === 'ready' && (
+        <MobileDock picks={slipPicks} acca={slipAcca} onScrollToSlip={scrollToSlip} />
+      )}
     </div>
   )
 }

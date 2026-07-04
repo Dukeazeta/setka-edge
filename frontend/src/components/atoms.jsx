@@ -47,13 +47,14 @@ export function ProbBar({ value }) {
 
 export function SkeletonRow() {
   return (
-    <div className="flex items-center gap-6 border-t border-ink-800 py-5">
-      <div className="skeleton h-3 w-12 rounded" />
-      <div className="flex-1 space-y-2">
-        <div className="skeleton h-4 w-2/3 rounded" />
-        <div className="skeleton h-3 w-1/3 rounded" />
+    <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-t border-ink-800 py-4 md:gap-6 md:py-5">
+      <div className="skeleton h-8 w-14 rounded md:h-3 md:w-12" />
+      <div className="space-y-2">
+        <div className="skeleton h-4 w-full max-w-[240px] rounded" />
+        <div className="skeleton h-4 w-3/4 max-w-[180px] rounded" />
+        <div className="skeleton mt-2 h-10 w-full rounded-xl md:hidden" />
       </div>
-      <div className="skeleton h-8 w-24 rounded-lg" />
+      <div className="skeleton h-9 w-16 rounded-lg" />
     </div>
   )
 }
