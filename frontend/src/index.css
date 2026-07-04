@@ -17,12 +17,12 @@ html {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
-  overflow-x: hidden;
+  /* clip (not hidden) avoids iOS/WebKit trapping vertical page scroll */
+  overflow-x: clip;
 }
 
 body {
-  overflow-x: hidden;
-  overscroll-behavior-y: none;
+  min-height: 100%;
 }
 
 ::selection {
@@ -46,4 +46,11 @@ body {
   &::-webkit-scrollbar {
     display: none;
   }
+}
+
+/* Horizontal strips: scroll sideways without hijacking page scroll */
+@utility scroll-strip-x {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
 }

@@ -1,12 +1,26 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Lightning } from '@phosphor-icons/react'
+import { Check, Copy, Lightning } from '@phosphor-icons/react'
 
 /** Sticky bottom summary on mobile — quick glance at slip + scroll to full list. */
-export default function MobileDock({ picks, acca, onScrollToSlip }) {
+export default function MobileDock({ picks, acca, slip, onScrollToSlip }) {
+  const [copied, setCopied] = useState(false)
   if (picks.length === 0) return null
 
   const top = picks[0]
+  const code = slip?.bookingCode
+
+  const copyCode = async (e) => {
+    e.stopPropagation()
+    if (!code) return
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      /* clipboard blocked */
+    }
+  }
 
   return (
     <motion.div
@@ -33,7 +47,18 @@ export default function MobileDock({ picks, acca, onScrollToSlip }) {
         </div>
         <div className="shrink-0 text-right">
           <p className="font-mono text-lg font-bold text-zinc-50">{acca.toFixed(2)}</p>
-          <p className="text-[10px] tracking-wide text-zinc-500 uppercase">combined</p>
+          {code ? (
+            <button
+              type="button"
+              onClick={copyCode}
+              className="mt-0.5 inline-flex items-center gap-1 font-mono text-[11px] text-emerald-300"
+            >
+              {code}
+              {copied ? <Check size={12} weight="bold" /> : <Copy size={12} weight="bold" />}
+            </button>
+          ) : (
+            <p className="text-[10px] tracking-wide text-zinc-500 uppercase">combined</p>
+          )}
         </div>
       </button>
     </motion.div>

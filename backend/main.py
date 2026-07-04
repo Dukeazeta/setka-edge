@@ -24,8 +24,45 @@ CACHE_DIR = Path(__file__).parent / "cache"
 CACHE_DIR.mkdir(exist_ok=True)
 SNAPSHOT_PATH = CACHE_DIR / "predictions.json"
 
-STATE: dict = {"predictions": [], "updatedAt": None, "historyMatches": 0, "refreshing": False, "error": None}
+STATE: dict = {
+    "predictions": [],
+    "updatedAt": None,
+    "historyMatches": 0,
+    "refreshing": False,
+    "error": None,
+    "slip": None,
+}
 REFRESH_INTERVAL_MIN = 20
+
+
+def _slip_picks(predictions: list[dict]) -> list[dict]:
+    now_ms = int(time.time() * 1000)
+    picks = [
+        e
+        for e in predictions
+        if e.get("best")
+        and e["best"].get("tier") != "lean"
+        and e["best"].get("prob", 0) >= 0.58
+        and e["best"].get("confidence") != "low"
+        and e.get("startTime", 0) > now_ms
+        and e["best"].get("selection")
+    ]
+    picks.sort(key=lambda e: e["best"]["prob"], reverse=True)
+    return picks[:6]
+
+
+async def _build_slip(predictions: list[dict]) -> dict:
+    picks = _slip_picks(predictions)
+    acca = 1.0
+    for e in picks:
+        acca *= e["best"]["odds"]
+    selections = [e["best"]["selection"] for e in picks]
+    booking = await fetchers.create_booking_code(selections)
+    return {
+        "pickCount": len(picks),
+        "accaOdds": round(acca, 2) if picks else None,
+        **booking,
+    }
 
 
 def _load_snapshot() -> None:
@@ -36,6 +73,7 @@ def _load_snapshot() -> None:
         STATE["predictions"] = data.get("predictions", [])
         STATE["updatedAt"] = data.get("updatedAt")
         STATE["historyMatches"] = data.get("historyMatches", 0)
+        STATE["slip"] = data.get("slip")
         log.info("loaded snapshot: %d events from %s", len(STATE["predictions"]), STATE["updatedAt"])
     except Exception:  # noqa: BLE001
         log.exception("failed to load snapshot")
@@ -49,6 +87,7 @@ def _save_snapshot() -> None:
                     "predictions": STATE["predictions"],
                     "updatedAt": STATE["updatedAt"],
                     "historyMatches": STATE["historyMatches"],
+                    "slip": STATE.get("slip"),
                 }
             ),
             encoding="utf-8",
@@ -78,6 +117,7 @@ async def refresh():
         preds = [evaluate_event(stats, e, markets.get(e["eventId"], {})) for e in pending]
         preds.sort(key=lambda p: p["startTime"])
         STATE["predictions"] = preds
+        STATE["slip"] = await _build_slip(preds)
         STATE["historyMatches"] = sum(len(v) for v in stats.match_wins.values()) // 2
         STATE["updatedAt"] = dt.datetime.now(dt.timezone.utc).isoformat()
         _save_snapshot()
@@ -128,6 +168,7 @@ async def predictions():
         "error": STATE["error"],
         "historyMatches": STATE["historyMatches"],
         "events": STATE["predictions"],
+        "slip": STATE.get("slip"),
     }
 
 
@@ -135,6 +176,18 @@ async def predictions():
 async def force_refresh():
     asyncio.create_task(refresh())
     return {"ok": True}
+
+
+@app.get("/api/metrics")
+async def metrics():
+    return STATE.get("_metrics") or {"note": "Run POST /api/metrics/refresh to compute backtest"}
+
+
+@app.post("/api/metrics/refresh")
+async def refresh_metrics():
+    from backtest import run_backtest
+    STATE["_metrics"] = run_backtest(max_matches=300)
+    return STATE["_metrics"]
 
 
 # Serve the built frontend (production single-service deploy). In dev, Vite proxies instead.

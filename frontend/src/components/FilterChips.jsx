@@ -3,7 +3,7 @@ import React from 'react'
 /** Horizontally scrollable league filters — snap on mobile, wrap on desktop. */
 export default function FilterChips({ options, value, onChange }) {
   return (
-    <nav className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 snap-x snap-mandatory scrollbar-none">
+    <nav className="scroll-strip-x -mx-4 flex gap-2 px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 snap-x snap-mandatory scrollbar-none">
       {options.map((f) => {
         const active = value === f
         return (

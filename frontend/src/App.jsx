@@ -156,7 +156,7 @@ export default function App() {
           </section>
 
           <aside className="order-1 lg:order-2">
-            {status === 'ready' && <BetSlip events={data?.events || []} id="slip" />}
+            {status === 'ready' && <BetSlip events={data?.events || []} slip={data?.slip} id="slip" />}
           </aside>
         </main>
 
@@ -169,7 +169,7 @@ export default function App() {
       </div>
 
       {status === 'ready' && (
-        <MobileDock picks={slipPicks} acca={slipAcca} onScrollToSlip={scrollToSlip} />
+        <MobileDock picks={slipPicks} acca={slipAcca} slip={data?.slip} onScrollToSlip={scrollToSlip} />
       )}
     </div>
   )

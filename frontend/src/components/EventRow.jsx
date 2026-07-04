@@ -80,6 +80,9 @@ export default function EventRow({ event, index }) {
             <div className="mt-3 flex items-center gap-2 rounded-xl border border-ink-700/80 bg-ink-900/40 px-3 py-2.5">
               <TierBadge tier={best.tier} />
               <span className="line-clamp-2 flex-1 text-sm leading-snug text-zinc-300">{best.bet}</span>
+              {best.confidence && (
+                <span className="shrink-0 font-mono text-[10px] uppercase text-zinc-500">{best.confidence}</span>
+              )}
             </div>
           ) : (
             <p className="mt-2 text-sm text-zinc-600">{event.note || 'Markets pending'}</p>
@@ -173,7 +176,11 @@ export default function EventRow({ event, index }) {
                     </div>
                   </div>
                   <div className="font-mono text-xs text-zinc-500">
-                    p {Math.round(p.prob * 100)}% · EV {p.ev > 0 ? '+' : ''}
+                    p {Math.round(p.prob * 100)}%
+                    {p.sampleN != null && ` · n=${Math.round(p.sampleN)}`}
+                    {p.confidence && ` · ${p.confidence}`}
+                    {' · EV '}
+                    {p.ev > 0 ? '+' : ''}
                     {Math.round(p.ev * 100)}%
                   </div>
                   <div className="font-mono text-sm font-medium text-zinc-200 sm:text-right">

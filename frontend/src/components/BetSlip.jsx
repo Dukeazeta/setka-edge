@@ -1,6 +1,6 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Lightning } from '@phosphor-icons/react'
+import { Check, Copy, Lightning } from '@phosphor-icons/react'
 import { TierBadge } from './atoms.jsx'
 
 const fmtTime = (ms) =>
@@ -8,7 +8,14 @@ const fmtTime = (ms) =>
 
 export function useSlipPicks(events) {
   return events
-    .filter((e) => e.best && e.best.tier !== 'lean' && e.best.prob >= 0.58 && e.startTime > Date.now())
+    .filter(
+      (e) =>
+        e.best &&
+        e.best.tier !== 'lean' &&
+        e.best.prob >= 0.58 &&
+        e.best.confidence !== 'low' &&
+        e.startTime > Date.now(),
+    )
     .sort((a, b) => b.best.prob - a.best.prob)
     .slice(0, 6)
 }
@@ -30,15 +37,67 @@ function PickCard({ event, compact = false }) {
         {event.home} vs {event.away}
       </p>
       <div className="mt-3 flex items-end justify-between border-t border-ink-800 pt-3">
-        <span className="font-mono text-xs text-zinc-400">{Math.round(best.prob * 100)}% model</span>
+        <div>
+          <span className="font-mono text-xs text-zinc-400">{Math.round(best.prob * 100)}%</span>
+          {best.sampleN != null && (
+            <span className="ml-2 font-mono text-[10px] text-zinc-600">n={Math.round(best.sampleN)}</span>
+          )}
+        </div>
         <span className="font-mono text-base font-semibold text-emerald-300">{best.odds.toFixed(2)}</span>
       </div>
     </div>
   )
 }
 
+function BookingCode({ slip }) {
+  const [copied, setCopied] = useState(false)
+  if (!slip?.bookingCode) return null
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(slip.bookingCode)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      /* clipboard blocked */
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-2xl border border-ink-700/80 bg-ink-900/50 p-4">
+      <p className="text-[10px] tracking-wide text-zinc-500 uppercase">SportyBet booking code</p>
+      <div className="mt-2 flex items-center gap-2">
+        <span className="font-mono text-lg font-semibold tracking-wider text-zinc-100">
+          {slip.bookingCode}
+        </span>
+        <button
+          type="button"
+          onClick={copy}
+          className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-full border border-ink-700 text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-200"
+          aria-label="Copy booking code"
+        >
+          {copied ? <Check size={16} weight="bold" /> : <Copy size={16} weight="bold" />}
+        </button>
+      </div>
+      {slip.shareUrl && (
+        <a
+          href={slip.shareUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 inline-block text-xs text-emerald-300/90 hover:text-emerald-300"
+        >
+          Load on SportyBet →
+        </a>
+      )}
+      <p className="mt-2 text-[11px] leading-relaxed text-zinc-600">
+        Paste in SportyBet betslip → Booking Code → Load. Expires when the first leg starts.
+      </p>
+    </div>
+  )
+}
+
 /** Desktop rail + mobile horizontal carousel of highest-confidence picks. */
-export default function BetSlip({ events, id = 'slip' }) {
+export default function BetSlip({ events, slip, id = 'slip' }) {
   const picks = useSlipPicks(events)
   const acca = picks.reduce((acc, e) => acc * e.best.odds, 1)
 
@@ -59,7 +118,7 @@ export default function BetSlip({ events, id = 'slip' }) {
       ) : (
         <>
           {/* Mobile: horizontal snap carousel */}
-          <div className="-mx-4 mt-4 flex gap-3 overflow-x-auto px-4 pb-2 snap-x snap-mandatory scrollbar-none lg:mx-0 lg:hidden lg:flex-col lg:overflow-visible lg:px-0 lg:pb-0">
+          <div className="scroll-strip-x -mx-4 mt-4 flex gap-3 px-4 pb-2 snap-x snap-mandatory scrollbar-none lg:mx-0 lg:hidden lg:flex-col lg:overflow-visible lg:px-0 lg:pb-0">
             {picks.map((e, i) => (
               <motion.div
                 key={e.eventId}
@@ -106,6 +165,15 @@ export default function BetSlip({ events, id = 'slip' }) {
             </span>
             <span className="font-mono text-lg font-bold text-zinc-100">{acca.toFixed(2)}</span>
           </div>
+
+          <BookingCode slip={slip} />
+
+          {slip?.bookingError && !slip?.bookingCode && (
+            <p className="mt-3 text-xs leading-relaxed text-zinc-600">
+              Booking code unavailable ({slip.bookingError}). Picks are still ranked above — load
+              them manually on SportyBet.
+            </p>
+          )}
         </>
       )}
 

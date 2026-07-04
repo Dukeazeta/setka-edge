@@ -1,0 +1,9 @@
+{
+  "half_life_days": 3.0,
+  "shrinkage_k": 10.0,
+  "hall_min_samples": 8,
+  "h2h_match_min": 3,
+  "h2h_set1_min": 5,
+  "h2h_match_weight": 0.8,
+  "h2h_set1_weight": 0.8
+}
