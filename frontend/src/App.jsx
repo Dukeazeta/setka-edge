@@ -4,29 +4,44 @@ import { ArrowsClockwise, WifiSlash } from '@phosphor-icons/react'
 import { usePredictions } from './usePredictions.js'
 import { PulseDot, SkeletonRow } from './components/atoms.jsx'
 import EventRow from './components/EventRow.jsx'
-import BetSlip, { useSlipPicks } from './components/BetSlip.jsx'
+import BetSlip from './components/BetSlip.jsx'
 import FilterChips from './components/FilterChips.jsx'
 import MobileDock from './components/MobileDock.jsx'
-
-const LEAGUE_FILTERS = ['All', 'Ukraine', 'Czech Republic', 'Moldova']
-
-function leagueOf(e) {
-  if (/Czech/i.test(e.league)) return 'Czech Republic'
-  if (/Moldova/i.test(e.league)) return 'Moldova'
-  return 'Ukraine'
-}
+import MetricsBar from './components/MetricsBar.jsx'
+import {
+  LEAGUE_FILTERS,
+  TIME_FILTERS,
+  TIER_FILTERS,
+  SORT_OPTIONS,
+  matchesLeague,
+  matchesTime,
+  matchesTier,
+  sortEvents,
+  resolveSlipPicks,
+} from './lib/filters.js'
 
 export default function App() {
   const { status, data, error, waking, forceRefresh } = usePredictions()
-  const [filter, setFilter] = useState('All')
+  const [league, setLeague] = useState('All')
+  const [timeFilter, setTimeFilter] = useState('All')
+  const [tierFilter, setTierFilter] = useState('All picks')
+  const [sortBy, setSortBy] = useState('By time')
 
   const events = useMemo(() => {
     const all = data?.events || []
-    return filter === 'All' ? all : all.filter((e) => leagueOf(e) === filter)
-  }, [data, filter])
+    const filtered = all.filter(
+      (e) => matchesLeague(e, league) && matchesTime(e, timeFilter) && matchesTier(e, tierFilter),
+    )
+    return sortEvents(filtered, sortBy)
+  }, [data, league, timeFilter, tierFilter, sortBy])
 
-  const slipPicks = useSlipPicks(data?.events || [])
-  const slipAcca = slipPicks.reduce((acc, e) => acc * e.best.odds, 1)
+  const slipPicks = resolveSlipPicks(data?.events || [], data?.slip)
+  const slipAcca = data?.slip?.accaOdds ?? slipPicks.reduce((acc, e) => acc * e.best.odds, 1)
+
+  const strongCount = useMemo(
+    () => (data?.events || []).filter((e) => e.best?.tier === 'strong').length,
+    [data],
+  )
 
   const updated = data?.updatedAt
     ? new Date(data.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -51,7 +66,7 @@ export default function App() {
               Setka Edge
             </h1>
             <p className="mt-2 max-w-[52ch] text-sm leading-relaxed text-zinc-400 sm:text-base">
-              Setka Cup matches on SportyBet, ranked by highest model probability.
+              Setka Cup matches on SportyBet, ranked by highest calibrated probability.
             </p>
           </div>
 
@@ -74,15 +89,21 @@ export default function App() {
           </div>
         </header>
 
+        {status === 'ready' && data?.metrics && <MetricsBar metrics={data.metrics} />}
+
         {status === 'ready' && data?.events?.length > 0 && (
-          <div className="mt-6 grid grid-cols-3 gap-2 border-y border-ink-800 py-3 md:mt-8 md:gap-4">
+          <div className="mt-6 grid grid-cols-2 gap-2 border-y border-ink-800 py-3 sm:grid-cols-4 md:mt-8 md:gap-4">
             <div>
-              <p className="font-mono text-lg font-semibold text-zinc-100">{data.events.length}</p>
-              <p className="text-[10px] tracking-wide text-zinc-500 uppercase">on board</p>
+              <p className="font-mono text-lg font-semibold text-zinc-100">{events.length}</p>
+              <p className="text-[10px] tracking-wide text-zinc-500 uppercase">filtered</p>
+            </div>
+            <div>
+              <p className="font-mono text-lg font-semibold text-emerald-300">{strongCount}</p>
+              <p className="text-[10px] tracking-wide text-zinc-500 uppercase">strong tier</p>
             </div>
             <div>
               <p className="font-mono text-lg font-semibold text-emerald-300">{slipPicks.length}</p>
-              <p className="text-[10px] tracking-wide text-zinc-500 uppercase">58%+ picks</p>
+              <p className="text-[10px] tracking-wide text-zinc-500 uppercase">slip legs</p>
             </div>
             <div>
               <p className="font-mono text-lg font-semibold text-zinc-100">
@@ -108,11 +129,15 @@ export default function App() {
           </div>
         )}
 
-        <div className="mt-6 md:mt-10">
-          <FilterChips options={LEAGUE_FILTERS} value={filter} onChange={setFilter} />
+        <div className="mt-6 space-y-3 md:mt-10">
+          <FilterChips options={LEAGUE_FILTERS} value={league} onChange={setLeague} />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <FilterChips options={TIME_FILTERS} value={timeFilter} onChange={setTimeFilter} />
+            <FilterChips options={TIER_FILTERS} value={tierFilter} onChange={setTierFilter} />
+          </div>
+          <FilterChips options={SORT_OPTIONS} value={sortBy} onChange={setSortBy} />
         </div>
 
-        {/* Mobile: slip carousel first, then feed. Desktop: side-by-side. */}
         <main className="mt-6 grid grid-cols-1 gap-10 lg:mt-8 lg:grid-cols-[2fr_1fr] lg:gap-12">
           <section className="order-2 lg:order-1">
             {status === 'loading' && (
@@ -144,9 +169,10 @@ export default function App() {
 
             {status === 'ready' && events.length === 0 && (
               <div className="border-t border-ink-800 pt-10">
-                <p className="font-medium text-zinc-300">No matches for this filter.</p>
+                <p className="font-medium text-zinc-300">No matches for these filters.</p>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                  Fixtures roll in through the day. Try another league or check back shortly.
+                  Try widening the time window or lowering the tier filter. Fixtures roll in through
+                  the day.
                 </p>
               </div>
             )}
@@ -156,7 +182,9 @@ export default function App() {
           </section>
 
           <aside className="order-1 lg:order-2">
-            {status === 'ready' && <BetSlip events={data?.events || []} slip={data?.slip} id="slip" />}
+            {status === 'ready' && (
+              <BetSlip picks={slipPicks} slip={data?.slip} id="slip" />
+            )}
           </aside>
         </main>
 

@@ -11,6 +11,7 @@ from pathlib import Path
 
 from halls import location_ids_for_league
 import player_cache
+from calibration import apply_calibration, calibration_key, load_calibration
 
 CONFIG_PATH = Path(__file__).parent / "config.json"
 
@@ -26,6 +27,10 @@ def load_config() -> dict:
         "h2h_set1_min": 5,
         "h2h_match_weight": 0.8,
         "h2h_set1_weight": 0.8,
+        "best_min_sampleN": 12,
+        "best_min_confidence": "medium",
+        "market_min_sampleN": {"186": 15, "245": 12, "247": 10},
+        "slip_min_prob": 0.60,
     }
     if CONFIG_PATH.exists():
         defaults.update(json.loads(CONFIG_PATH.read_text(encoding="utf-8")))
@@ -92,6 +97,63 @@ def _confidence(n_eff: float, h2h_n: int, cfg: dict) -> str:
     return "low"
 
 
+def _confidence_rank(conf: str) -> int:
+    return {"low": 0, "medium": 1, "high": 2}.get(conf, 0)
+
+
+def _meets_confidence(conf: str, minimum: str) -> bool:
+    return _confidence_rank(conf) >= _confidence_rank(minimum)
+
+
+def _calibration_key(mid: str, line: float | None = None) -> str:
+    if mid == "247":
+        if line is not None and line <= 17.5:
+            return "247_17.5"
+        if line is not None and line <= 18.5:
+            return "247_18.5"
+        return "247_19.5"
+    return mid
+
+
+def _line_from_entry(entry: dict) -> float | None:
+    if entry.get("mid") != "247":
+        return None
+    spec = entry.get("specifier", "")
+    if "total=" not in spec:
+        bet = entry.get("bet", "")
+        import re
+        m = re.search(r"([\d.]+)$", bet)
+        return float(m.group(1)) if m else None
+    return float(spec.split("total=")[1].split("|")[0])
+
+
+def _select_best_primary(primary: list[dict], cfg: dict) -> tuple[dict | None, bool]:
+    """Return (best entry, qualified). Qualified picks pass sampleN/confidence gates."""
+    if not primary:
+        return None, False
+
+    min_conf = cfg.get("best_min_confidence", "medium")
+    min_n = cfg.get("best_min_sampleN", 12)
+    market_min = cfg.get("market_min_sampleN", {})
+
+    qualified = []
+    for p in primary:
+        mid = p["mid"]
+        need_n = market_min.get(mid, min_n)
+        if p["sampleN"] < need_n:
+            continue
+        if not _meets_confidence(p["confidence"], min_conf):
+            continue
+        qualified.append(p)
+
+    if qualified:
+        qualified.sort(key=lambda r: (-r["prob"], -r["ev"]))
+        return qualified[0], True
+
+    primary.sort(key=lambda r: (-r["prob"], -r["ev"]))
+    return primary[0], False
+
+
 def _bt(pa: float, pb: float) -> float:
     num = pa * (1 - pb)
     den = num + pb * (1 - pa)
@@ -101,9 +163,9 @@ def _bt(pa: float, pb: float) -> float:
 class PlayerStats:
     """Per-player timed samples, global + per-hall, with H2H stores."""
 
-    def __init__(self, tournaments: list, ref_time: datetime | None = None):
+    def __init__(self, tournaments: list, ref_time: datetime | None = None, cfg: dict | None = None):
         self.ref_time = ref_time or datetime.now(timezone.utc)
-        self.cfg = load_config()
+        self.cfg = cfg if cfg is not None else load_config()
         self.names: dict[int, str] = {}
 
         # global timed samples
@@ -264,10 +326,10 @@ class PlayerStats:
         raw = _bt(ind_h, ind_a)
         n_eff = min(n_h, n_a)
 
-        if len(h2h_s1) >= cfg["h2h_match_min"]:
+        if len(h2h_s1) >= cfg["h2h_set1_min"]:
             hw = sum(1 for _, w in h2h_s1 if w == hid)
             h2h_p = hw / len(h2h_s1)
-            w = cfg["h2h_match_weight"]
+            w = cfg["h2h_set1_weight"]
             raw = w * h2h_p + (1 - w) * raw
             n_eff = max(n_eff, len(h2h_s1) * 2)
 
@@ -297,8 +359,9 @@ class PlayerStats:
         return cal, raw, n_eff
 
 
-def evaluate_event(stats: PlayerStats, event: dict, market_data: dict) -> dict:
+def evaluate_event(stats: PlayerStats, event: dict, market_data: dict, *, use_calibration: bool = True) -> dict:
     cfg = stats.cfg
+    cal_table = load_calibration() if use_calibration else None
     hid = stats.find(event["home"])
     aid = stats.find(event["away"])
     locs = location_ids_for_league(event.get("league", ""))
@@ -332,6 +395,11 @@ def evaluate_event(stats: PlayerStats, event: dict, market_data: dict) -> dict:
     if h2h_m:
         hw = sum(1 for _, w in h2h_m if w == hid)
         out["h2h"] = {"home": hw, "away": len(h2h_m) - hw}
+        if h2h_s1t:
+            out["h2hRecent"] = [
+                {"set1Total": tot, "homeWonSet1": w == hid}
+                for (_, tot), (_, w) in zip(h2h_s1t[-5:], h2h_s1w[-5:])
+            ]
 
     n_home = len(stats.first_totals[hid])
     n_away = len(stats.first_totals[aid])
@@ -402,6 +470,12 @@ def evaluate_event(stats: PlayerStats, event: dict, market_data: dict) -> dict:
             if p is None:
                 continue
 
+            shrunk_p = p
+            line = _line_from_entry({"mid": mid, "specifier": spec, "bet": label}) if mid == "247" else None
+            if use_calibration and mid in PRIMARY_MARKETS:
+                cal_key = calibration_key(mid, line)
+                p = apply_calibration(shrunk_p, cal_key, cal_table)
+
             h2h_n = len(h2h_m)
             conf = _confidence(n_eff, h2h_n, cfg)
             ev = p * odds - 1
@@ -417,6 +491,7 @@ def evaluate_event(stats: PlayerStats, event: dict, market_data: dict) -> dict:
                 "mid": mid,
                 "outcomeId": str(o["id"]),
                 "specifier": spec,
+                "line": line,
             }
             picks.append(entry)
             if mid == "247" and "total=" in spec:
@@ -431,19 +506,21 @@ def evaluate_event(stats: PlayerStats, event: dict, market_data: dict) -> dict:
         best_247.append(group[0])
 
     primary = [p for p in picks if p["mid"] in ("186", "245")] + best_247
-    primary.sort(key=lambda r: (-r["prob"], -r["ev"]))
+    best, qualified = _select_best_primary(primary, cfg)
 
     out["picks"] = [
-        {k: v for k, v in p.items() if k not in ("mid", "outcomeId", "specifier")} for p in picks[:8]
+        {k: v for k, v in p.items() if k not in ("mid", "outcomeId", "specifier", "line")} for p in picks[:8]
     ]
 
-    if primary:
-        best = primary[0]
+    if best:
         tier = (
             "strong"
-            if best["prob"] >= 0.72 and best["sampleN"] >= 20 and best["confidence"] == "high"
+            if qualified
+            and best["prob"] >= 0.72
+            and best["sampleN"] >= 20
+            and best["confidence"] == "high"
             else "value"
-            if best["prob"] >= 0.58 and best["sampleN"] >= 12
+            if qualified and best["prob"] >= 0.58 and best["sampleN"] >= 12
             else "lean"
         )
         out["best"] = {
@@ -456,6 +533,8 @@ def evaluate_event(stats: PlayerStats, event: dict, market_data: dict) -> dict:
             "sampleN": best["sampleN"],
             "confidence": best["confidence"],
             "tier": tier,
+            "marketId": best["mid"],
+            "qualified": qualified,
             "selection": {
                 "eventId": event["eventId"],
                 "marketId": best["mid"],

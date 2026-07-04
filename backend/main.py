@@ -23,6 +23,7 @@ log = logging.getLogger("setka.api")
 CACHE_DIR = Path(__file__).parent / "cache"
 CACHE_DIR.mkdir(exist_ok=True)
 SNAPSHOT_PATH = CACHE_DIR / "predictions.json"
+METRICS_PATH = CACHE_DIR / "metrics.json"
 
 STATE: dict = {
     "predictions": [],
@@ -36,19 +37,36 @@ REFRESH_INTERVAL_MIN = 20
 
 
 def _slip_picks(predictions: list[dict]) -> list[dict]:
+    from engine import load_config
+
+    cfg = load_config()
+    slip_min = cfg.get("slip_min_prob", 0.60)
     now_ms = int(time.time() * 1000)
     picks = [
         e
         for e in predictions
         if e.get("best")
         and e["best"].get("tier") != "lean"
-        and e["best"].get("prob", 0) >= 0.58
+        and e["best"].get("qualified", True)
+        and e["best"].get("prob", 0) >= slip_min
         and e["best"].get("confidence") != "low"
         and e.get("startTime", 0) > now_ms
         and e["best"].get("selection")
     ]
     picks.sort(key=lambda e: e["best"]["prob"], reverse=True)
     return picks[:6]
+
+
+def _slip_leg(event: dict) -> dict:
+    best = event["best"]
+    return {
+        "eventId": event["eventId"],
+        "startTime": event["startTime"],
+        "home": event["home"],
+        "away": event["away"],
+        "league": event.get("league"),
+        "best": {k: v for k, v in best.items() if k != "selection"},
+    }
 
 
 async def _build_slip(predictions: list[dict]) -> dict:
@@ -61,8 +79,26 @@ async def _build_slip(predictions: list[dict]) -> dict:
     return {
         "pickCount": len(picks),
         "accaOdds": round(acca, 2) if picks else None,
+        "legs": [_slip_leg(e) for e in picks],
         **booking,
     }
+
+
+def _load_metrics() -> None:
+    if not METRICS_PATH.exists():
+        return
+    try:
+        STATE["_metrics"] = json.loads(METRICS_PATH.read_text(encoding="utf-8"))
+        log.info("loaded metrics snapshot")
+    except Exception:  # noqa: BLE001
+        log.exception("failed to load metrics")
+
+
+def _save_metrics(data: dict) -> None:
+    try:
+        METRICS_PATH.write_text(json.dumps(data), encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        log.exception("failed to save metrics")
 
 
 def _load_snapshot() -> None:
@@ -129,13 +165,30 @@ async def refresh():
         STATE["refreshing"] = False
 
 
+async def _warm_metrics():
+    if STATE.get("_metrics"):
+        return
+    try:
+        from backtest import rebuild_calibration, run_backtest
+
+        await asyncio.to_thread(rebuild_calibration, 250)
+        data = await asyncio.to_thread(run_backtest, 250)
+        STATE["_metrics"] = data
+        _save_metrics(data)
+        log.info("backtest warm-up done: %.1f%% hit rate", data.get("hit_rate", 0) * 100)
+    except Exception:  # noqa: BLE001
+        log.exception("metrics warm-up failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _load_snapshot()
+    _load_metrics()
     scheduler = AsyncIOScheduler()
     scheduler.add_job(refresh, "interval", minutes=REFRESH_INTERVAL_MIN)
     scheduler.start()
     asyncio.create_task(refresh())
+    asyncio.create_task(_warm_metrics())
     yield
     scheduler.shutdown(wait=False)
 
@@ -169,6 +222,7 @@ async def predictions():
         "historyMatches": STATE["historyMatches"],
         "events": STATE["predictions"],
         "slip": STATE.get("slip"),
+        "metrics": STATE.get("_metrics"),
     }
 
 
@@ -185,9 +239,12 @@ async def metrics():
 
 @app.post("/api/metrics/refresh")
 async def refresh_metrics():
-    from backtest import run_backtest
-    STATE["_metrics"] = run_backtest(max_matches=300)
-    return STATE["_metrics"]
+    from tune import run_tune
+
+    data = await asyncio.to_thread(run_tune, 300)
+    STATE["_metrics"] = data
+    _save_metrics(data)
+    return data
 
 
 # Serve the built frontend (production single-service deploy). In dev, Vite proxies instead.

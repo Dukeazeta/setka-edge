@@ -6,20 +6,6 @@ import { TierBadge } from './atoms.jsx'
 const fmtTime = (ms) =>
   new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
-export function useSlipPicks(events) {
-  return events
-    .filter(
-      (e) =>
-        e.best &&
-        e.best.tier !== 'lean' &&
-        e.best.prob >= 0.58 &&
-        e.best.confidence !== 'low' &&
-        e.startTime > Date.now(),
-    )
-    .sort((a, b) => b.best.prob - a.best.prob)
-    .slice(0, 6)
-}
-
 function PickCard({ event, compact = false }) {
   const { best } = event
   return (
@@ -97,9 +83,8 @@ function BookingCode({ slip }) {
 }
 
 /** Desktop rail + mobile horizontal carousel of highest-confidence picks. */
-export default function BetSlip({ events, slip, id = 'slip' }) {
-  const picks = useSlipPicks(events)
-  const acca = picks.reduce((acc, e) => acc * e.best.odds, 1)
+export default function BetSlip({ picks, slip, id = 'slip' }) {
+  const acca = slip?.accaOdds ?? picks.reduce((acc, e) => acc * e.best.odds, 1)
 
   return (
     <div id={id} className="lg:sticky lg:top-8">
@@ -178,8 +163,8 @@ export default function BetSlip({ events, slip, id = 'slip' }) {
       )}
 
       <p className="mt-6 max-w-[38ch] text-xs leading-relaxed text-zinc-600 lg:mt-8">
-        Probabilities from the last 10 days of Setka Cup results and head-to-heads, priced against
-        live SportyBet odds. Past form is a weak oracle — stake accordingly.
+        Probabilities from the last 14 days of Setka Cup results and head-to-heads, priced against
+        live SportyBet odds. Booking code matches the legs listed above exactly.
       </p>
     </div>
   )

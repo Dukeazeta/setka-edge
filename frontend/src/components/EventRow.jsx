@@ -164,6 +164,27 @@ export default function EventRow({ event, index }) {
             className="overflow-hidden"
           >
             <div className="space-y-4 border-t border-ink-800/50 pb-5 pt-3 md:pl-16">
+              {event.h2hRecent?.length > 0 && (
+                <div>
+                  <p className="mb-2 text-[10px] tracking-wide text-zinc-500 uppercase">
+                    Recent H2H — 1st set totals
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {event.h2hRecent.map((h, i) => (
+                      <span
+                        key={i}
+                        className={`rounded-lg border px-2 py-1 font-mono text-xs ${
+                          h.homeWonSet1
+                            ? 'border-emerald-400/20 bg-emerald-400/5 text-emerald-300'
+                            : 'border-rose-400/20 bg-rose-400/5 text-rose-300'
+                        }`}
+                      >
+                        {h.set1Total} pts
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
               {(event.picks || []).map((p) => (
                 <div
                   key={p.bet}

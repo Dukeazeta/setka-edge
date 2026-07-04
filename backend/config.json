@@ -5,5 +5,9 @@
   "h2h_match_min": 3,
   "h2h_set1_min": 5,
   "h2h_match_weight": 0.8,
-  "h2h_set1_weight": 0.8
+  "h2h_set1_weight": 0.8,
+  "best_min_sampleN": 12,
+  "best_min_confidence": "medium",
+  "market_min_sampleN": { "186": 15, "245": 12, "247": 10 },
+  "slip_min_prob": 0.60
 }
